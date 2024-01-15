@@ -1,5 +1,16 @@
 const global = { 
-    currentPage: window.location.pathname
+    currentPage: window.location.pathname,
+    search: {
+      term: '',
+      type: '',
+      page: 1,
+      totalPages: 1,
+      totalResults: 0
+    },
+    api: {
+      apiKey: 'b8e630dae88f945aea3ca78718f60f06',
+      apiURL: 'https://api.themoviedb.org/3/'
+    }
 }
 
 //takes the end point that points to popular movies and displays them on the home page
@@ -76,6 +87,7 @@ async function displayPopularShows(){
 
  async function displayMovieDetails() {
     const movieId = window.location.search.split('?')[1];
+    console.log(movieId)
 
     const movie = await fetchAPIData(`movie/${movieId}`)
     
@@ -133,14 +145,73 @@ async function displayPopularShows(){
   document.querySelector('#movie-details').appendChild(div)
  }
 
+ async function displaySliderMovieDetails(){
+
+  const movieId = window.location.search.split('=')[1];
+  console.log(movieId)
+
+  const movie = await fetchAPIData(`movie/${movieId}`)
+  
+  //overlay for background image
+
+  displayBackgroundImage('movie', movie.backdrop_path)
+  
+
+  const div = document.createElement('div');
+  div.innerHTML=`<div class="details-top">
+  <div>
+  ${
+      movie.poster_path ? 
+      `<img
+      src="https://image.tmdb.org/t/p/w500${movie.poster_path}"
+      class="card-img-top"
+      alt=${movie.title}
+    />` 
+    : `<img
+    src="images/no-image.jpg"
+    class="card-img-top"
+    alt=${movie.title}
+  />`
+    }
+  </div>
+  <div>
+    <h2>${movie.title}</h2>
+    <p>
+      <i class="fas fa-star text-primary"></i>
+      ${movie.vote_average.toFixed(1)} / 10
+    </p>
+    <p class="text-muted">Release Date: ${movie.release_date}</p>
+    <p>
+     ${movie.overview}
+    </p>
+    <h5>Genres</h5>
+    <ul class="list-group">
+      ${movie.genres.map((genre) => `<li>${genre.name}</li>`).join('')}
+    </ul>
+    <a href=${movie.homepage} target="_blank" class="btn">Visit Movie Homepage</a>
+  </div>
+</div>
+<div class="details-bottom">
+  <h2>Movie Info</h2>
+  <ul>
+    <li><span class="text-secondary">Budget:</span> $${addCommas(movie.budget)}</li>
+    <li><span class="text-secondary">Revenue:</span> ${addCommas(movie.revenue)}</li>
+    <li><span class="text-secondary">Runtime:</span> ${movie.runtime} minutes</li>
+    <li><span class="text-secondary">Status:</span> ${movie.status}</li>
+  </ul>
+  <h4>Production Companies</h4>
+  <div class="list-group">${movie.production_companies.map((company) => `<span>${company.name}</span>`).join('' )}</div>
+</div>`;
+
+document.querySelector('#movie-details').appendChild(div)
+ }
+
  //display TV show details
 
  async function displayShowDetails() {
     const showId = window.location.search.split('?')[1];
 
     const show = await fetchAPIData(`tv/${showId}`)
-
-    console.log(show)
 
     displayBackgroundImage('show', show.backdrop_path)
 
@@ -197,8 +268,8 @@ async function displayPopularShows(){
 
 //fetch data from TMDB API
 async function fetchAPIData(endpoint){
-    const API_KEY = 'b8e630dae88f945aea3ca78718f60f06'
-    const API_URL = 'https://api.themoviedb.org/3/'
+    const API_KEY = global.api.apiKey
+    const API_URL = global.api.apiURL
 
     showSpinner()
 
@@ -255,11 +326,201 @@ function displayBackgroundImage(type, backgroundPath){
 
     if(type === 'movie'){
         document.querySelector('#movie-details').appendChild(overlayDiv)
-        console.log(overlayDiv)
     } else {
         document.querySelector(`#show-details`).appendChild(overlayDiv)
-        console.log(overlayDiv)
     }
+}
+
+//this function will display slidder with movies
+
+async function dsplaySlidder(){
+  const {results} = await fetchAPIData('movie/now_playing')
+  
+  results.forEach((movie) => {
+    const div = document.createElement('div');
+    div.classList.add('swiper-slide')
+    div.innerHTML = `
+    <a href="movie-details.html?id=${movie.id}">
+      <img src="https://image.tmdb.org/t/p/w500${movie.poster_path}" alt="${movie.title}" />
+    </a>
+    <h4 class="swiper-rating">
+      <i class="fas fa-star text-secondary"></i> ${movie.vote_average.toFixed(1)} / 10
+    </h4>`;
+  document.querySelector('.swiper-wrapper').append(div)
+
+  initSwiper();
+  })
+}
+
+//search movies/ shows
+
+async function search(){
+  //this gets the query string
+
+  const queryString = window.location.search;
+  const urlParams = new URLSearchParams(queryString);
+
+  global.search.type = urlParams.get('type')
+  global.search.term = urlParams.get('search-term')
+
+  if(global.search.term !== '' && global.search.term !== null ){
+    const {results, total_pages, page, total_results} = await searchAPIData();
+
+    global.search.page = page;
+    global.search.totalPages = total_pages;
+    global.search.totalResults = total_results;
+
+    if(results.length === 0){
+      showAlert('No results found', 'error')
+      return;
+    } 
+
+    displaySearchResults(results)
+
+    document.querySelector('#search-term').value = '';
+
+  } else {
+      showAlert('please enter a search term', 'error')
+  }
+}
+
+function displaySearchResults(results){
+ //clear previous results
+  document.querySelector('#search-results').innerHTML = '';
+  document.querySelector('#search-results-heading').innerHTML = '';
+  document.querySelector('#pagination').innerHTML = '';
+
+
+  results.forEach((result) => {
+    const div = document.createElement('div');
+    div.classList.add('card');
+    div.innerHTML = `
+    <a href="${global.search.type}-details.html?${result.id}">
+      ${
+        result.poster_path ? 
+        `<img
+        src="https://image.tmdb.org/t/p/w500/${result.poster_path}"
+        class="card-img-top"
+        alt="Movie Title"
+      />` 
+      : `<img
+      src="images/no-image.jpg"
+      class="card-img-top"
+      alt=${global.search.type === 'movie' ? result.title : result.name}
+    />`
+      }
+    </a>
+    <div class="card-body">
+      <h5 class="card-title">${global.search.type === 'movie' ? result.title : result.name}</h5>
+      <p class="card-text">
+        <small class="text-muted">Release: ${global.search.type === 'movie' ? result.release_date : result.first_air_date}</small>
+      </p>
+    </div>`
+    ;
+
+    document.querySelector('#search-results-heading').innerHTML = `
+    <h2>${results.length} of ${global.search.totalResults} Results for ${global.search.term}</h2>
+    `
+
+    document.querySelector('#search-results').appendChild(div)
+});
+
+
+  displayPageination()
+}
+
+//create and display pagination for search
+
+function displayPageination(){
+  const div = document.createElement('div');
+  div.classList.add('pagination');
+  div.innerHTML = `
+  <button class="btn btn-primary" id="prev">Prev</button>
+          <button class="btn btn-primary" id="next">Next</button>
+          <div class="page-counter">Page ${global.search.page} of ${global.search.totalPages}</div>
+  `
+  
+  document.querySelector('#pagination').appendChild(div);
+
+  //disable prev button if on first page
+
+  if(global.search.page === 1){
+    document.querySelector('#prev').disabled = true;
+  }
+
+  //disable next if on last page
+
+  if(global.search.page === global.search.totalPages){
+    document.querySelector('#next').disabled = true;
+  }
+
+  //next page
+  document.querySelector('#next').addEventListener('click', async () => {
+    global.search.page++;
+    const {results, total_pages} = await searchAPIData();
+    displaySearchResults(results)
+  })
+//prev page
+  document.querySelector('#prev').addEventListener('click', async () => {
+    global.search.page--;
+    const {results, total_pages} = await searchAPIData();
+    displaySearchResults(results)
+  })
+
+}
+
+//search api data 
+async function searchAPIData(){
+  const API_KEY = global.api.apiKey
+  const API_URL = global.api.apiURL
+
+  showSpinner()
+
+  const response = await fetch(`${API_URL}search/${global.search.type}?api_key=${API_KEY}&language=en-US&query=${global.search.term}&page=${global.search.page}`);
+
+  const data = await response.json();
+  
+  hideSpinner();
+
+  return data;
+}
+
+
+function showAlert(message, className){
+  const alertEl = document.createElement('div');
+  alertEl.classList.add('alert', className)
+  alertEl.appendChild(document.createTextNode(message))
+  document.querySelector('#alert').appendChild(alertEl)
+
+  setTimeout(() => {
+    alertEl.remove()
+  },3000)
+}
+
+
+
+function initSwiper(){
+  const swiper = new Swiper('.swiper', {
+    slidesPerView: 1, 
+    spaceBetween: 30,
+    freeMode: true,
+    loop: true,
+    autoplay: {
+      delay: 4000,
+      disableOnInteraction: false
+    },
+    breakpoints: {
+      500: {
+        slidesPerView: 2
+      },
+      700: {
+        slidesPerView: 3
+      },
+      1200: {
+        slidesPerView: 4
+      }
+    }
+  });
 }
 
 //init app
@@ -269,20 +530,21 @@ function init(){
     switch(global.currentPage){
         case '/':
         case '/index.html':
+            dsplaySlidder()
             displayPopularMovies();
             break;
         case "/shows.html":
             displayPopularShows();
             break;
         case "/movie-details.html":
+            displaySliderMovieDetails()
             displayMovieDetails();
-            console.log('Movie Details');
             break;
         case "/tv-details.html":
             displayShowDetails()
-            console.log('TV Details')
             break;
         case "/search.html":
+            search()
             console.log('Search')
             break;
     } 
